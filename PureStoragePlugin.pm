@@ -888,6 +888,12 @@ sub parse_volname {
   return 0;
 }
 
+sub path {
+  my ($class, $scfg, $volname, $storeid, $snapname) = @_;
+  print "Debug :: PVE::Storage::Custom::PureStoragePLugin::sub:path\n" if $DEBUG;
+  return $class->filesystem_path($scfg, $volname, $snapname);
+}
+
 sub filesystem_path {
   my ( $class, $scfg, $volname, $snapname ) = @_;
   print "Debug :: PVE::Storage::Custom::PureStoragePlugin::sub::filesystem_path\n" if $DEBUG;
