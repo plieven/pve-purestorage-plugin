@@ -619,22 +619,28 @@ sub purestorage_get_wwn {
 sub purestorage_volume_connection {
   my ( $class, $scfg, $volname, $mode ) = @_;
 
-  my $method = $mode ? 'POST' : 'DELETE';
-  print "Debug :: PVE::Storage::Custom::PureStoragePlugin::sub::purestorage_volume_connection :: $method\n" if $DEBUG;
-
   my $hname    = PVE::INotify::nodename();
   my $hgsuffix = $scfg->{ hgsuffix } // $default_hgsuffix;
   $hname .= "-" . $hgsuffix if $hgsuffix ne "";
 
+  my $method;
   my $name;
-  my $ignore;
-  if ( $mode ) {
-    $name   = 'create volume connection';
-    $ignore = 'Connection already exists.';
+  my $ignore = '';
+  if ( !defined($mode) ) {
+    $name   = 'get volume connection';
+    $method = 'GET';
   } else {
-    $name   = 'delete volume connection';
-    $ignore = [ 'Volume has been destroyed.', 'Connection does not exist.' ];
+    if ( $mode ) {
+      $name   = 'create volume connection';
+      $method = 'POST';
+    } else {
+      $name   = 'delete volume connection';
+      $ignore = 'Volume has been destroyed.';
+      $method = 'DELETE';
+    }
   }
+
+  print "Debug :: PVE::Storage::Custom::PureStoragePlugin::sub::purestorage_volume_connection :: $method\n" if $DEBUG;
 
   my $action = {
     name   => $name,
@@ -649,8 +655,19 @@ sub purestorage_volume_connection {
 
   my $response = purestorage_api_request( $scfg, $action, 1 );
 
-  my $message = ( $response->{ errors } ? 'already ' : '' ) . ( $mode ? 'connected to' : 'disconnected from' );
-  print "Info :: Volume \"$volname\" is $message host \"$hname\".\n";
+  if (!defined($mode) || $mode) {
+    my $lun = 0;
+    $lun = $response->{ items }->[0]->{ lun } if $response->{ items }->[0] && $response->{ items }->[0]->{ volume }->{ name } eq purestorage_name( $scfg, $volname );
+    if ($lun) {
+      print "Info :: Volume \"$volname\" is " . ( defined($mode) ? 'now ' : '' ) . "connected as LUN $lun to Host \"$hname\"\n";
+      return $lun;
+    }
+    die ("Error :: Could not get LUN for Volume \"$volname\" on Host \"$hname\"\n") if ($mode);
+    print "Info :: Volume \"$volname\" is currently not connected to Host \"$hname\"\n";
+    return 0;
+  }
+  print "Info :: Volume \"$volname\" is " . ( $response->{ errors } ? 'already ' : '' ) . "disconnected from Host \"$hname\"\n";
+
   return 1;
 }
 
@@ -1103,7 +1120,10 @@ sub activate_volume {
   my ( $class, $storeid, $scfg, $volname, $snapname, $cache ) = @_;
   print "Debug :: PVE::Storage::Custom::PureStoragePlugin::sub::activate_volume\n" if $DEBUG;
 
-  $class->purestorage_volume_connection( $scfg, $volname, 1 );
+  my $lun = $class->purestorage_volume_connection( $scfg, $volname );
+  if (!$lun) {
+    $class->purestorage_volume_connection( $scfg, $volname, 1 );
+  }
 
   $class->map_volume( $storeid, $scfg, $volname, $snapname );
   return 1;
@@ -1115,7 +1135,10 @@ sub deactivate_volume {
 
   $class->unmap_volume( $storeid, $scfg, $volname, $snapname );
 
-  $class->purestorage_volume_connection( $scfg, $volname, 0 );
+  my $lun = $class->purestorage_volume_connection( $scfg, $volname );
+  if ($lun) {
+    $class->purestorage_volume_connection( $scfg, $volname, 0 );
+  }
 
   print "Info :: Volume \"$volname\" is deactivated.\n";
 
