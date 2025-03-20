@@ -96,9 +96,17 @@ sub properties {
       default     => 'no'
     },
     protocol => {
-      description => "Set storage protocol ( iscsi | fc | nvme )",
+      description => "Set storage protocol ( iscsi | iscsidirect | fc | nvme )",
       type        => 'string',
       default     => $default_protocol
+    },
+    target_addr => {
+      description => "Set storage iSCSI Target Portal address (only for protocol iscsidirect)",
+      type        => 'string',
+    },
+    target_name => {
+      description => "Set storage iSCSI Target Name (only for protocol iscsidirect)",
+      type        => 'string',
     },
   };
 }
@@ -108,16 +116,18 @@ sub options {
     address => { fixed => 1 },
     token   => { fixed => 1 },
 
-    hgsuffix  => { optional => 1 },
-    vgname    => { optional => 1 },
-    podname   => { optional => 1 },
-    vnprefix  => { optional => 1 },
-    check_ssl => { optional => 1 },
-    protocol  => { optional => 1 },
-    nodes     => { optional => 1 },
-    disable   => { optional => 1 },
-    content   => { optional => 1 },
-    format    => { optional => 1 },
+    hgsuffix    => { optional => 1 },
+    vgname      => { optional => 1 },
+    podname     => { optional => 1 },
+    vnprefix    => { optional => 1 },
+    check_ssl   => { optional => 1 },
+    protocol    => { optional => 1 },
+    nodes       => { optional => 1 },
+    disable     => { optional => 1 },
+    content     => { optional => 1 },
+    format      => { optional => 1 },
+    target_addr => { optional => 1 },
+    target_name => { optional => 1 },
   };
 }
 
@@ -748,6 +758,14 @@ sub purestorage_resize_volume {
 
   my $serial = $response->{ items }->[0]->{ serial } or die "Error :: Failed to retrieve volume serial";
 
+  my $protocol = $scfg->{ protocol } // $default_protocol;
+  if ( $protocol eq "iscsidirect" ) {
+      my $newsize = 0;
+      $newsize = $response->{ items }->[0]->{ provisioned } if $response->{ items }->[0]->{ source }->{ name } eq purestorage_name( $scfg, $volname );
+      die ("Error :: Could not get new size for Volume \"$volname\"\n") if (!$newsize);
+      return $newsize;
+  }
+
   my ( $path, $wwid ) = get_device_path_wwn( $serial );
 
   # return early if the volume is not mapped (normally should not happen)
@@ -907,7 +925,27 @@ sub parse_volname {
 
 sub path {
   my ($class, $scfg, $volname, $storeid, $snapname) = @_;
-  print "Debug :: PVE::Storage::Custom::PureStoragePLugin::sub:path\n" if $DEBUG;
+  print "Debug :: PVE::Storage::Custom::PureStoragePlugin::sub:path\n" if $DEBUG;
+
+  my $protocol = $scfg->{ protocol } // $default_protocol;
+  if ( $protocol eq "iscsidirect" ) {
+    die "Error :: path: snapshot is not implemented ($snapname)\n" if defined($snapname);
+
+    my $lun = $class->purestorage_volume_connection( $scfg, $volname );
+    if (!$lun) {
+      $lun = $class->purestorage_volume_connection( $scfg, $volname, 1 );
+    }
+    # do we even need this?
+    my ( $vtype, undef, $vmid ) = $class->parse_volname( $volname );
+
+    my $target = $scfg->{target_name};
+    my $portal = $scfg->{target_addr};
+    my $path = "iscsi://$portal/$target/$lun";
+
+    print ("Debug :: path: $path\n") if $DEBUG;
+    return ($path, $vmid, $vtype);
+  }
+
   return $class->filesystem_path($scfg, $volname, $snapname);
 }
 
@@ -1124,16 +1162,20 @@ sub activate_volume {
   if (!$lun) {
     $class->purestorage_volume_connection( $scfg, $volname, 1 );
   }
-
-  $class->map_volume( $storeid, $scfg, $volname, $snapname );
-  return 1;
+  my $protocol = $scfg->{ protocol } // $default_protocol;
+  if ( $protocol ne "iscsidirect" ) {
+    $class->map_volume( $storeid, $scfg, $volname, $snapname );
+  }
 }
 
 sub deactivate_volume {
   my ( $class, $storeid, $scfg, $volname, $snapname, $cache ) = @_;
   print "Debug :: PVE::Storage::Custom::PureStoragePlugin::sub::deactivate_volume\n" if $DEBUG;
 
-  $class->unmap_volume( $storeid, $scfg, $volname, $snapname );
+  my $protocol = $scfg->{ protocol } // $default_protocol;
+  if ( $protocol ne "iscsidirect" ) {
+    $class->unmap_volume( $storeid, $scfg, $volname, $snapname );
+  }
 
   my $lun = $class->purestorage_volume_connection( $scfg, $volname );
   if ($lun) {
