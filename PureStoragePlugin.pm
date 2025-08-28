@@ -434,28 +434,38 @@ sub block_device_slaves {
 ### BLOCK: Local multipath => PVE::Storage::Custom::PureStoragePlugin::sub::s
 
 sub store_auth_token {
-  my ( $scfg, $i ) = @_;
+  my ( $scfg, $i, $auth_token ) = @_;
+
+  $scfg->{ '_auth_token' . $i } = $auth_token;
 
   my $filename = '/var/run/pve-purestorage-plugin.'.md5_hex($scfg->{'token'}).'._auth_token'.$i;
+  print "Debug :: PVE::Storage::Custom::PureStoragePlugin::sub::store_auth_token to ".$filename." and \$scfg\n" if $DEBUG;
+
   open(my $fh, '>', $filename);
   flock($fh, LOCK_EX);
-  print $fh $scfg->{ '_auth_token' . $i };
+  print $fh $auth_token;
   close($fh);
   chmod 0600, $filename;
-
-  print "Debug :: PVE::Storage::Custom::PureStoragePlugin::sub::store_auth_token ".$filename."\n" if $DEBUG;
 }
 
 sub load_auth_token {
   my ( $scfg, $i ) = @_;
+
+  if ($scfg->{ '_auth_token' . $i }) {
+    print "Debug :: PVE::Storage::Custom::PureStoragePlugin::sub::load_auth_token from \$scfg\n" if $DEBUG;
+    return $scfg->{ '_auth_token' . $i };
+  }
+
   my $filename = '/var/run/pve-purestorage-plugin.'.md5_hex($scfg->{'token'}).'._auth_token'.$i;
+  print "Debug :: PVE::Storage::Custom::PureStoragePlugin::sub::load_auth_token from ".$filename."\n" if $DEBUG;
   open(my $fh, '<', $filename);
-  return if (!$fh);
+  return undef if (!$fh);
   flock($fh, LOCK_SH);
-  $scfg->{ '_auth_token' . $i } = <$fh>;
+  my $auth_token = <$fh>;
   close($fh);
 
-  print "Debug :: PVE::Storage::Custom::PureStoragePlugin::sub::load_auth_token ".$filename."\n" if $DEBUG;
+  $scfg->{ '_auth_token' . $i } = $auth_token;
+  return $auth_token;
 }
 
 sub purestorage_api_request {
@@ -496,21 +506,18 @@ sub purestorage_api_request {
     my $cf = $url eq '' ? 'address' : $token eq '' ? 'token' : '';
     die "Error :: Pure Storage \"$cf\" parameter" . ( $i == 0 ? '' : ' for second array' ) . " is not defined.\n" unless $cf eq '';
 
-    load_auth_token( $scfg, $i ) if (!$scfg->{ '_auth_token' . $i });
-
     my $config = {
       ua         => $ua,
       url        => $url,
       token      => $token,
-      auth_token => $scfg->{ '_auth_token' . $i },
       request_id => $scfg->{ '_request_id' . $i }
     };
+    $config->{ auth_token } = load_auth_token( $scfg, $i ) unless $login == 1;
 
     ( $error, $content ) = purestorage_api_request1( $config, $path, $method, $login, $body );
     if ( $error == -1 ) {
-      $scfg->{ '_auth_token' . $i } = $config->{ auth_token };
       $scfg->{ '_request_id' . $i } = $config->{ request_id };
-      store_auth_token( $scfg, $i );
+      store_auth_token( $scfg, $i, $config->{ auth_token } );
     } elsif ( $error == 1 ) {
       my $ignore = $action->{ ignore };
       if ( defined( $ignore ) ) {
