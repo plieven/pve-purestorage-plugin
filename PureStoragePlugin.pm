@@ -251,11 +251,13 @@ sub prepare_api_params {
   my $ref;
   my @ands;
   my $or;
-  while ( my ( $key, $value ) = each( %$parms ) ) {
+  foreach my $key ( sort keys %$parms ) {
+    my $value = $parms->{$key};
     $ref = ref $value;
     if ( $ref eq 'HASH' ) {
       @temp = ();
-      while ( my ( $fname, $fvalue ) = each( %$value ) ) {
+      foreach my $fname ( sort keys %$value ) {
+        my $fvalue = $value->{$fname};
         $ref = ref $fvalue;
         if ( $ref eq '' ) {
           $fvalue = [ split( ',', $fvalue ) ];
