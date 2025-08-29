@@ -823,8 +823,7 @@ sub purestorage_resize_volume {
 
   if ( $class->get_protocol($scfg) eq "iscsidirect" ) {
       my $newsize = 0;
-      $newsize = $response->{ items }->[0]->{ provisioned } if $response->{ items }->[0]->{ source }->{ name } eq purestorage_name( $scfg, $volname );
-      $newsize = $response->{ items }->[0]->{ provisioned } if $response->{ items }->[0]->{ name } eq purestorage_name( $scfg, $volname );
+      $newsize = $response->{ items }->[0]->{ provisioned } if ( $response->{ items }->[0]->{ name } eq purestorage_name( $scfg, $volname ) || $response->{ items }->[0]->{ source }->{ name } eq purestorage_name( $scfg, $volname ) );
       die ("Error :: Could not get new size for Volume \"$volname\"\n") if (!$newsize);
       return $newsize;
   }
