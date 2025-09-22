@@ -457,10 +457,10 @@ sub load_auth_token {
   }
 
   my $filename = '/var/run/pve-purestorage-plugin.'.md5_hex($scfg->{'token'}).'._auth_token'.$i;
+  return undef unless (-e $filename);
   print "Debug :: PVE::Storage::Custom::PureStoragePlugin::sub::load_auth_token from ".$filename."\n" if $DEBUG;
   open(my $fh, '<', $filename);
-  return undef if (!$fh);
-  flock($fh, LOCK_SH);
+  flock($fh, LOCK_SH) or do { close $fh; return undef };
   my $auth_token = <$fh>;
   close($fh);
 
