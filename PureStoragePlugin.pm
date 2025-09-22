@@ -571,6 +571,7 @@ sub purestorage_api_request1 {
     }
     $headers->header( 'X-Request-ID' => $config->{ request_id } ) if $config->{ request_id };
 
+    print "Debug :: " . $method . ' ' . $config->{ url } . '/api/'.$PSFA_API . '/' . $path."\n" if $DEBUG;
     my $request = HTTP::Request->new( $method, $config->{ url } . '/api/' . $PSFA_API . '/' . $path, $headers, length( $body ) ? encode_json( $body ) : undef );
     $response = $config->{ ua }->request( $request );
 
