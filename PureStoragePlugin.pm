@@ -722,6 +722,10 @@ sub purestorage_volume_connection {
 
   my $response = purestorage_api_request( $scfg, $action, 1 );
 
+  if ($hname eq "*") {
+      return $response;
+  }
+
   if ( $mode == 0 || $mode == 1 ) {
     my $lun = 0;
     $lun = $response->{ items }->[0]->{ lun } if $response->{ items }->[0] && $response->{ items }->[0]->{ volume }->{ name } eq purestorage_name( $scfg, $volname );
