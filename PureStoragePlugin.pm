@@ -1251,6 +1251,13 @@ sub activate_volume {
   my ( $class, $storeid, $scfg, $volname, $snapname, $cache ) = @_;
   print "Debug :: PVE::Storage::Custom::PureStoragePlugin::sub::activate_volume\n" if $DEBUG;
 
+  my ( undef, undef, $vmid ) = $class->parse_volname( $volname );
+  my $vmcfg = PVE::QemuConfig->config_file($vmid);
+  if (-e $vmcfg) {
+      print "Info :: Volume \"$volname\" vmid $vmid config is located on this node. Removing all other node connections (storage fencing).\n";
+      $class->purestorage_delete_foreign_connections( $scfg, $volname );
+  }
+
   $class->purestorage_volume_connection( $scfg, $volname, 1 );
 
   $class->map_volume( $storeid, $scfg, $volname, $snapname );
