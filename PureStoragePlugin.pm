@@ -16,6 +16,7 @@ use PVE::Network         ();
 use PVE::Tools           qw( file_read_firstline run_command );
 use PVE::INotify         ();
 use PVE::Storage::Plugin ();
+use PVE::QemuConfig      ();
 
 use JSON::XS       qw( decode_json encode_json );
 use LWP::UserAgent ();
@@ -1080,7 +1081,11 @@ sub free_image {
   my ( $class, $storeid, $scfg, $volname, $isBase ) = @_;
   print "Debug :: PVE::Storage::Custom::PureStoragePlugin::sub::free_image\n" if $DEBUG;
 
-  $class->deactivate_volume( $storeid, $scfg, $volname );
+  $class->unmap_volume( $storeid, $scfg, $volname );
+
+  $class->purestorage_volume_connection( $scfg, $volname, -1 );
+
+  print "Info :: Volume \"$volname\" is deactivated.\n";
 
   $class->purestorage_remove_volume( $scfg, $volname, $storeid );
 
@@ -1228,6 +1233,13 @@ sub deactivate_volume {
   print "Debug :: PVE::Storage::Custom::PureStoragePlugin::sub::deactivate_volume\n" if $DEBUG;
 
   $class->unmap_volume( $storeid, $scfg, $volname, $snapname );
+
+  my ( undef, undef, $vmid ) = $class->parse_volname( $volname );
+  my $vmcfg = PVE::QemuConfig->config_file($vmid);
+  if (-e $vmcfg) {
+      print "Info :: Volume \"$volname\" is deactivated in pve, but remains mapped on pure to avoid alarms.\n";
+      return 1;
+  }
 
   $class->purestorage_volume_connection( $scfg, $volname, -1 );
 
