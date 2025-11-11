@@ -1114,6 +1114,8 @@ sub free_image {
 
   print "Info :: Volume \"$volname\" is deactivated.\n";
 
+  $class->purestorage_delete_foreign_connections( $scfg, $volname );
+
   $class->purestorage_remove_volume( $scfg, $volname, $storeid );
 
   return undef;
