@@ -682,9 +682,9 @@ sub purestorage_get_wwn {
 }
 
 sub purestorage_volume_connection {
-  my ( $class, $scfg, $volname, $mode ) = @_;
+  my ( $class, $scfg, $volname, $mode, $hname ) = @_;
 
-  my $hname    = PVE::INotify::nodename();
+  $hname = PVE::INotify::nodename() unless $hname;
   my $hgsuffix = $scfg->{ hgsuffix } // $default_hgsuffix;
   $hname .= "-" . $hgsuffix if $hgsuffix ne "";
 
