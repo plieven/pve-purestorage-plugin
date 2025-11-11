@@ -692,9 +692,11 @@ sub purestorage_volume_connection {
   my $method;
   my $name;
   my $ignore = '';
+  my $all = 1;
   if ($mode == 0) {
     $name   = 'get volume connection';
     $method = 'GET';
+    $all = 0;
   } elsif ($mode == -1) {
     $name   = 'delete volume connection';
     $ignore = [ 'Volume has been destroyed.', 'Connection does not exist.' ];
@@ -720,7 +722,7 @@ sub purestorage_volume_connection {
     }
   };
 
-  my $response = purestorage_api_request( $scfg, $action, 1 );
+  my $response = purestorage_api_request( $scfg, $action, $all );
 
   if ($hname eq "*") {
       return $response;
