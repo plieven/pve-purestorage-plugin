@@ -745,6 +745,29 @@ sub purestorage_volume_connection {
   return 1;
 }
 
+sub purestorage_delete_foreign_connections {
+    my ( $class, $scfg, $volname ) = @_;
+    print "Debug :: PVE::Storage::Custom::PureStoragePlugin::sub::purestorage_delete_foreign_connections\n" if $DEBUG;
+
+    my $hname = PVE::INotify::nodename();
+    my $hgsuffix = $scfg->{ hgsuffix } // $default_hgsuffix;
+    $hname .= "-" . $hgsuffix if $hgsuffix ne "";
+    my %seen;
+
+    my $response = $class->purestorage_volume_connection( $scfg, $volname, 0, '*' );
+    for my $item (@{ $response->{items} }) {
+        my $hostname = $item->{host}{name};
+        if (defined $hostname) {
+            next if $hostname eq $hname;
+            next if $hostname =~ /\Q:$hname\E$/;
+            $hostname = (split /:/, $hostname)[-1];
+            next if $seen{$hostname}++;
+            print "Warning :: Volume \"$volname\" has stale foreign connction to Host \"$hostname\". Removing...\n";
+            $class->purestorage_volume_connection( $scfg, $volname, -1, $hostname );
+        }
+    }
+}
+
 sub purestorage_create_volume {
   my ( $class, $scfg, $volname, $size, $storeid ) = @_;
   print "Debug :: PVE::Storage::Custom::PureStoragePlugin::sub::purestorage_create_volume\n" if $DEBUG;
